@@ -21,5 +21,8 @@
     <ClInclude Include="include\aslib\Result.hpp">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="include\aslib\DeepCopyPtr.hpp">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
