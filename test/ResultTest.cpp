@@ -1,10 +1,8 @@
 ﻿#include <iostream>
 #include <typeinfo>
-
-std::ostream &operator<<(std::ostream &stream, const std::type_info &type) { return stream << type.name(); }
-
-#define BOOST_TEST_MAIN
 #include <boost/test/auto_unit_test.hpp>
+
+std::ostream &operator<<(std::ostream &stream, const std::type_info &type);
 
 #include <aslib/Result.hpp>
 using aslib::Result;
