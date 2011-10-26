@@ -58,7 +58,7 @@ private: // private types {{{
 	typedef Result<SucceededType, FailedType> My;
 
 	/// 内部保持している値の種類.
-	enum State {
+	enum Kind {
 		uninit,	///< 未初期化. 内部に保持している値は無い.
 		succeeded,	///< 正常値.
 		failed	///< エラー値.
@@ -66,7 +66,7 @@ private: // private types {{{
 // }}}
 
 public:	// constructors / destructor {{{
-	Result() : state_(uninit) {}
+	Result() : kind_(uninit) {}
 	/// @param[in]	src	正常値.
 	Result(const SucceededType &src) { allocate(&src,succeeded); }
 	/// @param[in]	src	正常値.
@@ -78,15 +78,15 @@ public:	// constructors / destructor {{{
 
 	/// @param[in]	src	コピー元.
 	Result(const Result &src) {
-		if(src.state_ == uninit) return;
+		if(src.kind_ == uninit) return;
 
-		allocate(src.storage_, src.state_);
+		allocate(src.storage_, src.kind_);
 	}
 	/// @param[in]	src	コピー元.
-	Result(Result &&src) : state_(uninit) {
-		if(src.state_ == uninit) return;
+	Result(Result &&src) : kind_(uninit) {
+		if(src.kind_ == uninit) return;
 
-		allocate_move(&src.storage_, src.state_);
+		allocate_move(&src.storage_, src.kind_);
 	}
 
 	~Result() { destroy(); }
@@ -94,7 +94,7 @@ public:	// constructors / destructor {{{
 
 public:	// functions / operators
 	/// @return	保持している値が正常値かエラー値か. trueならば正常値.
-	operator bool() const { return state_ == succeeded; }
+	operator bool() const { return kind_ == succeeded; }
 
 	/**
 	 * @return	正常値を保持している場合、その値への参照を返す.
@@ -124,7 +124,7 @@ public:	// functions / operators
 	FailedType &fail() { return const_cast<FailedType &>(const_cast<const My *>(this)->fail()); }
 	// @overload
 	const FailedType &fail() const {
-		if(state_ == failed) return *reinterpret_cast<const FailedType *>(storage_);
+		if(kind_ == failed) return *reinterpret_cast<const FailedType *>(storage_);
 		throw NotHaveFailedObject();
 	}
 
@@ -132,8 +132,8 @@ public:	// functions / operators
 	Result &operator=(SucceededType &&rhs) { return substitute_move(&rhs, succeeded); }
 	Result &operator=(const FailedType &rhs) { return substitute(&rhs, failed); }
 	Result &operator=(FailedType &&rhs) { return substitute_move(&rhs, failed); }
-	Result &operator=(const Result &rhs) { return substitute(rhs.storage_, rhs.state_); }
-	Result &operator=(Result &&rhs) { return substitute_move(rhs.storage_, rhs.state_); }
+	Result &operator=(const Result &rhs) { return substitute(rhs.storage_, rhs.kind_); }
+	Result &operator=(Result &&rhs) { return substitute_move(rhs.storage_, rhs.kind_); }
 // }}}
 
 private:	// inner functions. {{{
@@ -141,10 +141,10 @@ private:	// inner functions. {{{
 	 * 指定した型の値を構築する.
 	 * 格納型のコピーコンストラクタを使用する.
 	 * @param[in]	src	コピー元
-	 * @param[in]	state	コピー元の値種別.
+	 * @param[in]	kind	コピー元の値種別.
 	 */
-	void allocate(const void *src, State srcState) {
-		switch(srcState) {
+	void allocate(const void *src, Kind srcKind) {
+		switch(srcKind) {
 		case succeeded:
 			new(storage_) SucceededType(*static_cast<const SucceededType *>(src));
 			break;
@@ -152,32 +152,32 @@ private:	// inner functions. {{{
 			new(storage_) FailedType(*static_cast<const FailedType *>(src));
 			break;
 		}
-		state_ = srcState;
+		kind_ = srcKind;
 	}
 	/**
 	 * @overload
 	 * 指定した型の値を構築する.
 	 * 格納型のデフォルトコンストラクタを使用する.
-	 * @param[in]	state	
+	 * @param[in]	kind	
 	 */
-	void allocate(State state) {
-		assert(state != uninit);
+	void allocate(Kind kind) {
+		assert(kind != uninit);
 
-		switch(state) {
+		switch(kind) {
 		case succeeded: new(storage_) SucceededType(); break;
 		case failed: new(storage_) FailedType(); break;
 		}
-		state_ = state;
+		kind_ = kind;
 	}
 
 	/**
 	 * 指定した型の値を構築する.
 	 * 格納型のムーブコンストラクタを使用する.
 	 * @param[in]	src	コピー元
-	 * @param[in]	state	コピー元の値種別.
+	 * @param[in]	kind	コピー元の値種別.
 	 */
-	void allocate_move(void *src, State srcState) {
-		switch(srcState) {
+	void allocate_move(void *src, Kind srcKind) {
+		switch(srcKind) {
 		case succeeded:
 			new(storage_) SucceededType(std::move(*static_cast<SucceededType *>(src)));
 			break;
@@ -185,20 +185,20 @@ private:	// inner functions. {{{
 			new(storage_) FailedType(std::move(*static_cast<FailedType *>(src)));
 			break;
 		}
-		state_ = srcState;
+		kind_ = srcKind;
 	}
 
 	/**
 	 * 指定した型の値を代入する.
 	 * 格納型に対応した代入演算子を使用する.
 	 * @param[in]	src	代入元を指すポインタ.
-	 * @param[in]	srcState	代入元の種類.
+	 * @param[in]	srcKind	代入元の種類.
 	 * @return	代入処理を行った自分自身(*this).
 	 */
-	Result &substitute(const void *src, State srcState) {
-		if(state_ != uninit) destroy();
-		if(srcState != uninit) allocate(srcState);
-		switch(srcState) {
+	Result &substitute(const void *src, Kind srcKind) {
+		if(kind_ != uninit) destroy();
+		if(srcKind != uninit) allocate(srcKind);
+		switch(srcKind) {
 		case succeeded:
 			*reinterpret_cast<SucceededType *>(storage_) = *static_cast<const SucceededType *>(src);
 			break;
@@ -206,7 +206,7 @@ private:	// inner functions. {{{
 			*reinterpret_cast<FailedType *>(storage_) = *static_cast<const FailedType *>(src);
 			break;
 		}
-		state_ = srcState;
+		kind_ = srcKind;
 
 		return *this;
 	}
@@ -214,13 +214,13 @@ private:	// inner functions. {{{
 	 * 指定した型の値を代入する.
 	 * 右辺値参照を右辺値とするoperator=を使用する.
 	 * @param[in]	src	代入元を指すポインタ.
-	 * @param[in]	srcState	代入元の種類.
+	 * @param[in]	srcKind	代入元の種類.
 	 * @return	代入処理を行った自分自身(*this).
 	 */
-	Result &substitute_move(void *src, State srcState) {
-		if(state_ != uninit) destroy();
-		if(srcState != uninit) allocate(srcState);
-		switch(srcState) {
+	Result &substitute_move(void *src, Kind srcKind) {
+		if(kind_ != uninit) destroy();
+		if(srcKind != uninit) allocate(srcKind);
+		switch(srcKind) {
 		case succeeded:
 			*reinterpret_cast<SucceededType *>(storage_) = std::move(*static_cast<SucceededType *>(src));
 			break;
@@ -228,18 +228,18 @@ private:	// inner functions. {{{
 			*reinterpret_cast<FailedType *>(storage_) = std::move(*static_cast<FailedType *>(src));
 			break;
 		}
-		state_ = srcState;
+		kind_ = srcKind;
 
 		return *this;
 	}
 
 	/// 内部に保持している値を破棄する.
 	void destroy() {
-		switch(state_) {
+		switch(kind_) {
 		case succeeded: Destoroyer<SucceededType>()(storage_); break;
 		case failed:    Destoroyer<FailedType   >()(storage_); break;
 		}
-		state_ = uninit;
+		kind_ = uninit;
 	}
 	/// 実際に値の破棄を行う.
 	template<typename T>
@@ -266,7 +266,7 @@ private:	// inner functions. {{{
 private:	// fields {{{
 
 	char storage_[CalcStorageSize::value];
-	State state_;
+	Kind kind_;
 // }}}
 };
 
